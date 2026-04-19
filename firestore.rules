@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidNameSubmission(data) {
+      return data.fullName is string && data.fullName.size() <= 20 &&
+             data.surname is string && data.surname.size() <= 10 &&
+             data.char1 is string && data.char1.size() <= 5 &&
+             data.char2 is string && data.char2.size() <= 5 &&
+             data.votes is int &&
+             (data.userWish == null || data.userWish is string) &&
+             (data.analysis == null || data.analysis is map) &&
+             data.visitorId is string &&
+             data.createdAt == request.time;
+    }
+
+    match /name_submissions/{submissionId} {
+      // Allow anyone to read the submissions (anonymous list view)
+      allow list, get: if true;
+
+      // Allow anyone to create (anonymous submission)
+      allow create: if isValidNameSubmission(request.resource.data) && 
+                     request.resource.data.votes == 0;
+
+      // Allow anyone to update votes (atomic increment/decrement, capped 0-99)
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes']) &&
+                       (request.resource.data.votes == resource.data.get('votes', 0) + 1 || 
+                        request.resource.data.votes == resource.data.get('votes', 0) - 1) &&
+                       request.resource.data.votes >= 0 &&
+                       request.resource.data.votes <= 99;
+
+      // Admin Only: Allow deletion
+      allow delete: if request.auth != null && 
+                       request.auth.token.email == 'chingjucheng0118@gmail.com';
+    }
+
+    // Health check document
+    match /test/connection {
+      allow get: if true;
+    }
+  }
+}

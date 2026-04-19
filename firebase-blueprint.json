@@ -1,0 +1,33 @@
+{
+  "entities": {
+    "NameSubmission": {
+      "title": "Name Submission",
+      "description": "Records a proposed baby name and its analysis, along with community votes.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string", "description": "Full name (e.g., 鄭翔瑋)" },
+        "surname": { "type": "string", "description": "Surname used" },
+        "char1": { "type": "string", "description": "First given name character" },
+        "char2": { "type": "string", "description": "Second given name character" },
+        "analysis": {
+          "type": "object",
+          "description": "Analysis data for both characters",
+          "properties": {
+            "char1Stats": { "type": "object" },
+            "char2Stats": { "type": "object" },
+            "summary": { "type": "string" }
+          }
+        },
+        "votes": { "type": "integer", "description": "Number of community votes" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "surname", "char1", "char2", "analysis", "votes", "createdAt"]
+    }
+  },
+  "firestore": {
+    "name_submissions": {
+      "schema": "NameSubmission",
+      "description": "Collection of name suggestions submitted by users for voting."
+    }
+  }
+}

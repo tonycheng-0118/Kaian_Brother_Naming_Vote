@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-natural-bg: #FDF8F5;
+  --color-natural-card: #FFFFFF;
+  --color-natural-primary: #FFB7A1;
+  --color-natural-secondary: #D4E2D4;
+  --color-natural-dark: #5A4B41;
+  --color-natural-light: #8E7E73;
+  --color-natural-border: #F2E8E1;
+  --color-natural-success: #5A7B5A;
+  
+  --shadow-natural: 0 8px 30px rgba(90, 75, 65, 0.05);
+  
+  --font-sans: "PingFang TC", "Microsoft JhengHei", ui-sans-serif, system-ui, sans-serif;
+}
