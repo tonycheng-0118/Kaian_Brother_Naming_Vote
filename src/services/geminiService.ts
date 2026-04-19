@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { NameAnalysis, NameStats } from "../types";
-import { NameRecord } from "./dataService";
+import { NameRecord, ExcludeData } from "./dataService";
 
 let genAI: any = null;
 
@@ -22,16 +22,27 @@ export async function analyzeName(
   stats1: NameStats,
   stats2: NameStats,
   contextData: NameRecord[],
-  userWish: string
+  userWish: string,
+  excludeData: ExcludeData
 ): Promise<NameAnalysis> {
   const ai = getAI();
+  
+  const fullName = `${char1}${char2}`;
+  const fullFullName = `${surname}${char1}${char2}`;
+  const isNameExcluded = excludeData.excludedNames.includes(fullName) || excludeData.excludedNames.includes(fullFullName);
+  const isCharExcluded = stats1.isExcluded || stats2.isExcluded;
+
+  const penaltyWarning = (isNameExcluded || isCharExcluded) 
+    ? `\n【絕對重要警示】：此名字「${fullFullName}」或其單字已明確列入家族的「排除名單中」！請強制將總分結算至 40 分以下，將 isPenaltyTriggered 設為 true，並於 penaltyReason 標明「命中家族排除名單」。` 
+    : '';
+
   const prompt = `你是一位專業的命名大師與語言學家。目前正在為鄭家新生兒「楷安」進行姓名點評。
 請針對姓名：${surname}${char1}${char2} 進行深度分析。
 
 數據背景：
 - 首字「${char1}」：資料庫出現 ${stats1.frequency} 次，排名 ${stats1.rank}，是否流行：${stats1.isPopular}。
 - 次字「${char2}」：資料庫出現 ${stats2.frequency} 次，排名 ${stats2.rank}，是否流行：${stats2.isPopular}。
-- 父母期許：${userWish || "無特殊期許（請自由發揮優雅的祝福）"}
+- 父母期許：${userWish || "無特殊期許（請自由發揮優雅的祝福）"} ${penaltyWarning}
 
 評分與分析指南：
 1. 基礎分：從 80 分起跳。
@@ -39,7 +50,7 @@ export async function analyzeName(
    - 頻率與排名：如果字在 5000 字中排名前 500 且頻率適中，各加 2-3 分。
    - 流行屬性：若為流行字且不落俗套，加 2 分。
 3. 意境加成：根據父母期許與二字組合的語義、音韻、意境（由 AI 判斷），給予最後 0-5 分的專業加分 (aiPoints)。
-4. 排除字與諧音警示：若命中不雅諧音（包含常見的不良台語諧音）、負面意象或極度冷僻字，請將總分降至 40 分以下。此時必須將 \`isPenaltyTriggered\` 設為 \`true\`，並在 \`penaltyReason\` 中具體寫出原因（例如：「注意諧音：讀音近似ＸＸＸ」）。
+4. 排除字與諧音警示：若命中不雅諧音（包含常見的不良台語諧音）、負面意象或極度冷僻字，或者命中了排除名單，請將總分降至 40 分以下。此時必須將 \`isPenaltyTriggered\` 設為 \`true\`，並在 \`penaltyReason\` 中具體寫出原因。
 
 請務必回傳以下 JSON 格式（純 JSON，不含 Markdown 代號，不包含任何額外文字）：
 {
@@ -62,7 +73,7 @@ export async function analyzeName(
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: prompt,
     });
     

@@ -2,59 +2,82 @@ import axios from 'axios';
 import Papa from 'papaparse';
 import { NameAnalysis, NameStats, ScoreBreakdown } from '../types';
 
+export interface ExcludeData {
+  excludedChars: string[];
+  excludedNames: string[];
+}
+
 export interface NameRecord {
   char: string;
   frequency: number;
   rank: number;
   isPopular: boolean;
   isPolyphonic: boolean;
-  isExcluded: boolean;
+  isExcluded: boolean; // Retained for backwards compatibility
+}
+
+export interface NameDataResponse {
+  records: NameRecord[];
+  excludeData: ExcludeData;
 }
 
 // 鄭家使用的名字參考資料庫 (公用 CSV)
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTfKxVwD3v-6N9w5_f2_m8QeS1m8W7rO-O5z8k-9_Z-8-8-8-8-8/pub?output=csv';
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiPAZYD65-v-Qm0361dJIx-Nor-AuBgojoASrNr1AoYBTuDkte9rYyiel52TejL2lYQaMir_p2TDyD/pub?gid=781012340&single=true&output=csv';
 
-export async function fetchNameData(): Promise<NameRecord[]> {
+export async function fetchNameData(): Promise<NameDataResponse> {
   try {
-    // 這裡我們暫時使用一個內建的常見名字統計數據，以確保 AI 移除後依然有數據支撐
-    // 預期格式: 字,出現次數,排名,是否流行,是否破音,是否排除
-    const mockData = `字,出現次數,排名,是否流行,是否破音,是否排除
-安,1500,10,true,false,false
-楷,800,45,true,false,false
-家,1200,20,true,false,false
-承,500,120,false,false,false
-俊,950,30,true,false,false
-靖,400,180,false,false,false
-嘉,1100,25,true,false,false
-睿,350,220,false,false,false
-宇,1300,15,true,false,false
-軒,880,40,true,false,false
-`;
-    // 如果有真正的 URL 可以替換，這裡先用 Mock 確保運作
-    const results = Papa.parse(mockData, { header: true, skipEmptyLines: true });
-    return results.data.map((row: any) => ({
-      char: row['字'] || '',
-      frequency: parseInt(row['出現次數'] || '0'),
-      rank: parseInt(row['排名'] || '0'),
-      isPopular: row['是否流行'] === 'true',
-      isPolyphonic: row['是否破音'] === 'true',
-      isExcluded: row['是否排除'] === 'true'
-    }));
+    const response = await axios.get(SHEET_URL);
+    const results = Papa.parse(response.data, { header: true, skipEmptyLines: true });
+    
+    const records: NameRecord[] = [];
+    const excludedChars: string[] = [];
+    const excludedNames: string[] = [];
+
+    results.data.forEach((row: any) => {
+      const char = row['出現字']?.trim();
+      const excludedChar = row['排除字體']?.trim();
+      const excludedName = row['排除名字']?.trim();
+
+      if (excludedChar) {
+        excludedChars.push(excludedChar);
+      }
+      if (excludedName) {
+        excludedNames.push(excludedName);
+      }
+
+      if (char) {
+        records.push({
+          char: char,
+          frequency: parseInt(row['出現字次數'] || '0', 10),
+          rank: parseInt(row['常用5000字位置'] || '0', 10),
+          isPopular: row['流行名字']?.toUpperCase() === 'TRUE',
+          isPolyphonic: row['破音字']?.toUpperCase() === 'TRUE',
+          isExcluded: false // We will evaluate this via findCharStats
+        });
+      }
+    });
+
+    return {
+      records,
+      excludeData: { excludedChars, excludedNames }
+    };
   } catch (error) {
     console.error('Failed to fetch name data:', error);
-    return [];
+    return { records: [], excludeData: { excludedChars: [], excludedNames: [] } };
   }
 }
 
-export function findCharStats(data: NameRecord[], char: string): NameStats {
+export function findCharStats(data: NameRecord[], char: string, excludeData?: ExcludeData): NameStats {
   const found = data.find(d => d.char === char);
+  const isExcluded = excludeData ? excludeData.excludedChars.includes(char) : false;
+
   if (found) {
     return {
       frequency: found.frequency,
       rank: found.rank,
       isPopular: found.isPopular,
       isPolyphonic: found.isPolyphonic,
-      isExcluded: found.isExcluded,
+      isExcluded: isExcluded,
       description: `${char}字在資料庫中出現過 ${found.frequency} 次，排在第 ${found.rank} 名。`
     };
   }
@@ -63,7 +86,7 @@ export function findCharStats(data: NameRecord[], char: string): NameStats {
     rank: 0,
     isPopular: false,
     isPolyphonic: false,
-    isExcluded: false,
+    isExcluded: isExcluded,
     description: `此字在現有 5000+ 進階字庫中較為罕見。`
   };
 }

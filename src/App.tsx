@@ -41,7 +41,7 @@ import {
   onAuthStateChanged,
   User 
 } from "firebase/auth";
-import { fetchNameData, findCharStats, NameRecord } from "./services/dataService";
+import { fetchNameData, findCharStats, NameRecord, ExcludeData } from "./services/dataService";
 import { analyzeName } from "./services/geminiService";
 import { NameAnalysis, NameSubmission } from "./types";
 import { cn } from "./lib/utils";
@@ -58,6 +58,7 @@ export default function App() {
   const [submissions, setSubmissions] = useState<NameSubmission[]>([]);
   const [showBoard, setShowBoard] = useState(false);
   const [cachedData, setCachedData] = useState<NameRecord[]>([]);
+  const [cachedExcludeData, setCachedExcludeData] = useState<ExcludeData>({ excludedChars: [], excludedNames: [] });
   const [user, setUser] = useState<User | null>(null);
   const [visitorId, setVisitorId] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -110,6 +111,18 @@ export default function App() {
 
   const isAdmin = user?.email?.toLowerCase() === 'chingjucheng0118@gmail.com';
 
+  // Calculate days since birth (2026/04/17 as reference date based on context)
+  const calculateDaysSinceBirth = () => {
+    const birthDate = new Date("2026-04-17T00:00:00+08:00"); // Assuming Taiwan time GMT+8
+    const now = new Date();
+    // Default to at least day 1 if time zones or exact hours make it 0.
+    const diffTime = now.getTime() - birthDate.getTime();
+    if (diffTime < 0) return 1; // Fallback if before
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays;
+  };
+  const daysSinceBirth = calculateDaysSinceBirth();
+
   // Fetch names from board
   useEffect(() => {
     // We use a simple query and sort client-side to avoid needing complex composite indexes
@@ -148,17 +161,21 @@ export default function App() {
     try {
       // 1. Fetch character data
       let currentData = cachedData;
+      let currentExcludeData = cachedExcludeData;
       if (currentData.length === 0) {
-        currentData = await fetchNameData();
+        const fetched = await fetchNameData();
+        currentData = fetched.records;
+        currentExcludeData = fetched.excludeData;
         setCachedData(currentData);
+        setCachedExcludeData(currentExcludeData);
       }
 
       // 2. Find specific character stats
-      const stats1 = findCharStats(currentData, char1);
-      const stats2 = findCharStats(currentData, char2);
+      const stats1 = findCharStats(currentData, char1, currentExcludeData);
+      const stats2 = findCharStats(currentData, char2, currentExcludeData);
 
       // 3. AI analysis with real data
-      const result = await analyzeName(surname, char1, char2, stats1, stats2, currentData, userWish);
+      const result = await analyzeName(surname, char1, char2, stats1, stats2, currentData, userWish, currentExcludeData);
       setAnalysisResult(result);
     } catch (error: any) {
       console.error("Analysis failed:", error);
@@ -170,6 +187,17 @@ export default function App() {
 
   const handleRecord = async () => {
     if (!analysisResult) return;
+
+    // Check for duplicates
+    const currentFullName = `${surname}${char1}${char2}`;
+    const isDuplicate = submissions.some(item => item.fullName === currentFullName);
+    
+    if (isDuplicate) {
+      alert(`「${currentFullName}」已經存在於榜單上囉！請直接切換到榜單，幫這個名字「點讚」支持吧！`);
+      setShowBoard(true);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, "name_submissions"), {
@@ -272,7 +300,10 @@ export default function App() {
     <div className="min-h-screen bg-natural-bg text-natural-dark font-sans selection:bg-natural-primary/20 pb-20">
       {/* Header */}
       <header className="relative text-center py-8 md:py-10 px-4">
-        <div className="text-2xl md:text-3xl font-bold tracking-[2px] text-natural-primary mb-4 md:mb-2 text-balance leading-snug">楷安弟弟名字投票所 ✨</div>
+        <div className="text-2xl md:text-3xl font-bold tracking-[2px] text-natural-primary mb-3 md:mb-4 text-balance leading-snug">楷安弟弟名字投票所 ✨</div>
+        <p className="text-sm md:text-base text-natural-dark font-medium italic mb-2 px-2 md:px-0">
+          「大家好，我是楷安的弟弟，今天是出生第 <span className="font-bold text-natural-primary text-lg">{daysSinceBirth}</span> 天，歡迎大家幫我取一個好聽的名字喔!!」
+        </p>
         <div className="flex items-center justify-center gap-3 md:absolute md:top-4 md:right-4">
           {(user || isAdminModeRequested) && (
             <>
@@ -302,8 +333,19 @@ export default function App() {
       <main className="max-w-[940px] mx-auto px-4 md:px-6 grid md:grid-cols-[320px_1fr] gap-5 md:gap-6 items-start">
         {/* Left column: Input and Nav */}
         <div className="space-y-4 md:space-y-6">
-          <section className="bg-natural-card rounded-[24px] p-5 md:p-6 shadow-natural border border-natural-border space-y-5 md:space-y-6">
-            <div className="space-y-3">
+          <section className="bg-natural-card rounded-[24px] p-5 md:p-6 shadow-natural border border-natural-border space-y-5 md:space-y-6 relative overflow-hidden">
+            {/* Edge-to-edge baby photo inside the form card */}
+            <div className="-mx-5 -mt-5 md:-mx-6 md:-mt-6 mb-2 aspect-square sm:aspect-video md:aspect-square bg-natural-secondary/30 relative">
+              <img 
+                src="https://raw.githubusercontent.com/tonycheng-0118/Kaian_Brother_Naming_Vote/main/IMG_0132.jpg" 
+                alt="可愛的楷安弟弟" 
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
+            </div>
+
+            <div className="space-y-3 relative z-10">
               <label className="block text-[13px] font-semibold text-natural-light pl-1">請輸入新生兒姓名</label>
               <div className="flex justify-center sm:justify-start gap-3">
                 <div className="w-12 h-12 md:w-14 md:h-14 shrink-0 flex items-center justify-center bg-natural-primary/10 border-2 border-natural-primary/20 rounded-xl text-xl md:text-2xl text-natural-primary font-black shadow-inner shadow-natural-primary/5">
@@ -386,8 +428,8 @@ export default function App() {
               onClick={() => setShowBoard(!showBoard)}
               className="w-full p-4 rounded-2xl border-2 border-dashed border-natural-border text-natural-light hover:text-natural-primary hover:border-natural-primary transition-all font-semibold flex items-center justify-center gap-2"
             >
-              {showBoard ? <Search size={18} /> : <TrendingUp size={18} />}
-              {showBoard ? "切換至取名工具" : "查看大家提名的萌名榜單"}
+              {showBoard ? <Sparkles size={18} /> : <Search size={18} />}
+              {showBoard ? "返回取名首頁" : `查看大家提名的萌名榜單 (${submissions.length})`}
             </button>
         </div>
 
@@ -425,13 +467,6 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-
-                <button 
-                  onClick={() => setShowBoard(true)}
-                  className="w-full py-3.5 text-[14px] font-bold text-natural-primary flex items-center justify-center gap-2 hover:bg-natural-primary/5 rounded-2xl transition-colors border-2 border-dashed border-natural-primary/30"
-                >
-                  <Search size={16} /> 查看大家提名的萌名榜單 ({submissions.length})
-                </button>
               </motion.div>
             ) : analysisResult ? (
               <motion.div 
@@ -669,6 +704,11 @@ export default function App() {
           </AnimatePresence>
         </div>
       </main>
+
+      {/* Version Series */}
+      <footer className="text-center pt-8 pb-4 mt-8 text-[11px] font-mono text-natural-light/40 tracking-wider">
+        Ver. 20260419.04
+      </footer>
     </div>
   );
 }
