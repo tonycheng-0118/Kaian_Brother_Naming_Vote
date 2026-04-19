@@ -56,13 +56,24 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<NameAnalysis | null>(null);
   const [submissions, setSubmissions] = useState<NameSubmission[]>([]);
-  const [showBoard, setShowBoard] = useState(false);
+  const [showBoard, setShowBoard] = useState(true);
   const [cachedData, setCachedData] = useState<NameRecord[]>([]);
   const [cachedExcludeData, setCachedExcludeData] = useState<ExcludeData>({ excludedChars: [], excludedNames: [] });
   const [user, setUser] = useState<User | null>(null);
   const [visitorId, setVisitorId] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isAdminModeRequested, setIsAdminModeRequested] = useState(false);
+  const [secretClickCount, setSecretClickCount] = useState(0);
+
+  const handleSecretClick = () => {
+    setSecretClickCount(prev => {
+      const next = prev + 1;
+      if (next >= 3) {
+        setIsAdminModeRequested(true);
+      }
+      return next;
+    });
+  };
   
   const isComposing1 = useRef(false);
   const isComposing2 = useRef(false);
@@ -300,20 +311,36 @@ export default function App() {
     <div className="min-h-screen bg-natural-bg text-natural-dark font-sans selection:bg-natural-primary/20 pb-20">
       {/* Header */}
       <header className="relative text-center py-8 md:py-10 px-4">
-        <div className="text-2xl md:text-3xl font-bold tracking-[2px] text-natural-primary mb-3 md:mb-4 text-balance leading-snug">楷安弟弟名字投票所 ✨</div>
+        <div 
+          onClick={handleSecretClick}
+          className="text-2xl md:text-3xl font-bold tracking-[2px] text-natural-primary mb-3 md:mb-4 text-balance leading-snug cursor-pointer select-none"
+        >
+          楷安弟弟名字投票所 ✨
+        </div>
         <p className="text-sm md:text-base text-natural-dark font-medium italic mb-2 px-2 md:px-0">
-          「大家好，我是楷安的弟弟，今天是出生第 <span className="font-bold text-natural-primary text-lg">{daysSinceBirth}</span> 天，歡迎大家幫我取一個好聽的名字喔!!」
+          「大家好，我是楷安的弟弟，今天是出生第 <span className="font-bold text-natural-primary text-lg">{daysSinceBirth}</span> 天，歡迎大家來投票你心中的喜歡名字喔!!」
         </p>
-        <div className="flex items-center justify-center gap-3 md:absolute md:top-4 md:right-4">
+        <p className="text-xs md:text-sm text-natural-light/80 font-medium mb-4 px-2 md:px-0">
+          只要是喜歡的名字都可以按讚，隔一小時後可以再重複讚喔！
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3 md:absolute md:top-4 md:right-4">
           {(user || isAdminModeRequested) && (
             <>
               {isAdmin && (
-                <button 
-                  onClick={exportToCSV}
-                  className="px-3 py-1.5 bg-natural-success/10 text-natural-success rounded-lg border border-natural-success/20 text-[12px] font-medium flex items-center gap-1.5 hover:bg-natural-success hover:text-white transition-all"
-                >
-                  <Share2 size={14} /> 匯出 CSV
-                </button>
+                <>
+                  <button 
+                    onClick={() => setShowBoard(!showBoard)}
+                    className="px-3 py-1.5 bg-natural-primary/10 text-natural-primary rounded-lg border border-natural-primary/20 text-[12px] font-medium flex items-center gap-[4px] hover:bg-natural-primary hover:text-white transition-all whitespace-nowrap"
+                  >
+                    <Sparkles size={14} /> {showBoard ? "開啟取名模式" : "返回萌名榜單"}
+                  </button>
+                  <button 
+                    onClick={exportToCSV}
+                    className="px-3 py-1.5 bg-natural-success/10 text-natural-success rounded-lg border border-natural-success/20 text-[12px] font-medium flex items-center gap-1.5 hover:bg-natural-success hover:text-white transition-all whitespace-nowrap"
+                  >
+                    <Share2 size={14} /> 匯出 CSV
+                  </button>
+                </>
               )}
               {user ? (
                 <div className="flex items-center gap-2">
@@ -331,11 +358,11 @@ export default function App() {
       </header>
 
       <main className="max-w-[940px] mx-auto px-4 md:px-6 grid md:grid-cols-[320px_1fr] gap-5 md:gap-6 items-start">
-        {/* Left column: Input and Nav */}
+        {/* Left column: Photo and Input Nav */}
         <div className="space-y-4 md:space-y-6">
-          <section className="bg-natural-card rounded-[24px] p-5 md:p-6 shadow-natural border border-natural-border space-y-5 md:space-y-6 relative overflow-hidden">
+          <section className="bg-natural-card rounded-[24px] p-5 md:p-6 shadow-natural border border-natural-border relative overflow-hidden">
             {/* Edge-to-edge baby photo inside the form card */}
-            <div className="-mx-5 -mt-5 md:-mx-6 md:-mt-6 mb-2 aspect-square sm:aspect-video md:aspect-square bg-natural-secondary/30 relative">
+            <div className={`-mx-5 -mt-5 md:-mx-6 md:-mt-6 ${(!showBoard && isAdmin) ? 'mb-2' : '-mb-5 md:-mb-6'} aspect-square sm:aspect-[4/3] md:aspect-square bg-natural-secondary/30 relative`}>
               <img 
                 src="https://raw.githubusercontent.com/tonycheng-0118/Kaian_Brother_Naming_Vote/main/IMG_0132.jpg" 
                 alt="可愛的楷安弟弟" 
@@ -345,7 +372,9 @@ export default function App() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
             </div>
 
-            <div className="space-y-3 relative z-10">
+            {(!showBoard && isAdmin) && (
+              <div className="space-y-5 md:space-y-6 mt-6 relative z-10">
+                <div className="space-y-3">
               <label className="block text-[13px] font-semibold text-natural-light pl-1">請輸入新生兒姓名</label>
               <div className="flex justify-center sm:justify-start gap-3">
                 <div className="w-12 h-12 md:w-14 md:h-14 shrink-0 flex items-center justify-center bg-natural-primary/10 border-2 border-natural-primary/20 rounded-xl text-xl md:text-2xl text-natural-primary font-black shadow-inner shadow-natural-primary/5">
@@ -422,20 +451,13 @@ export default function App() {
                   系統將針對名中的「{char1 || "○"}」與「{char2 || "○"}」<br/>進行資料庫統計與美感分析。
                 </p>
               </div>
-            </section>
-
-            <button 
-              onClick={() => setShowBoard(!showBoard)}
-              className="w-full p-4 rounded-2xl border-2 border-dashed border-natural-border text-natural-light hover:text-natural-primary hover:border-natural-primary transition-all font-semibold flex items-center justify-center gap-2"
-            >
-              {showBoard ? <Sparkles size={18} /> : <Search size={18} />}
-              {showBoard ? "返回取名首頁" : `查看大家提名的萌名榜單 (${submissions.length})`}
-            </button>
+            </div>
+            )}
+          </section>
         </div>
 
         {/* Right column: Results or Board */}
-        {/* Right column: Results or Board */}
-        <div className="min-h-[400px]">
+        <div className="min-h-[400px] w-full">
           <AnimatePresence mode="wait">
             {!showBoard && !analysisResult ? (
               <motion.div 
@@ -707,7 +729,7 @@ export default function App() {
 
       {/* Version Series */}
       <footer className="text-center pt-8 pb-4 mt-8 text-[11px] font-mono text-natural-light/40 tracking-wider">
-        Ver. 20260419.04
+        Ver. 20260419.11
       </footer>
     </div>
   );

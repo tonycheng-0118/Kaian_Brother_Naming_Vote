@@ -73,12 +73,11 @@ export async function analyzeName(
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: prompt,
     });
     
     const text = (response.text || "").trim();
-    // Use regex to extract JSON if it's wrapped in markdown blocks
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]) as NameAnalysis;
